@@ -199,9 +199,10 @@ enum FR {
 				return
 			}
 			
-			let urlStr = template
-				.replacingOccurrences(of: "$(BASE64_CERT)", with: encodedCert)
-				.replacingOccurrences(of: "$(PASSWORD)", with: certificate.password ?? "")
+				let password = Storage.shared.password(for: certificate) ?? ""
+				let urlStr = template
+					.replacingOccurrences(of: "$(BASE64_CERT)", with: encodedCert)
+					.replacingOccurrences(of: "$(PASSWORD)", with: password)
 			
 			guard let callbackUrl = URL(string: urlStr) else {
 				return

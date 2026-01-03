@@ -6,6 +6,7 @@
 //
 
 import CoreData
+import OSLog
 
 // MARK: - Class
 final class Storage: ObservableObject {
@@ -28,6 +29,7 @@ final class Storage: ObservableObject {
 		})
 		
 		container.viewContext.automaticallyMergesChangesFromParent = true
+		migrateCertificatePasswordsIfNeeded()
 	}
 	
 	var context: NSManagedObjectContext {
@@ -37,14 +39,22 @@ final class Storage: ObservableObject {
 	func saveContext() {
 		DispatchQueue.main.async {
 			if self.context.hasChanges {
-				try? self.context.save()
+				do {
+					try self.context.save()
+				} catch {
+					Logger.storage.error("Failed to save context: \(error.localizedDescription)")
+				}
 			}
 		}
 	}
 	
 	func clearContext<T: NSManagedObject>(request: NSFetchRequest<T>) {
 		let deleteRequest = NSBatchDeleteRequest(fetchRequest: (request as? NSFetchRequest<NSFetchRequestResult>)!)
-		_ = try? context.execute(deleteRequest)
+		do {
+			_ = try context.execute(deleteRequest)
+		} catch {
+			Logger.storage.error("Failed to clear context: \(error.localizedDescription)")
+		}
 	}
 	
 	func countContent<T: NSManagedObject>(for type: T.Type) -> String {

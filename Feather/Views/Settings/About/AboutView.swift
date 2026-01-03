@@ -21,7 +21,6 @@ extension AboutView {
 // MARK: - View
 struct AboutView: View {
 	typealias CreditsDataHandler = Result<[CreditsModel], Error>
-	private let _dataService = NBFetchService()
 	
 	@State private var _credits: [CreditsModel] = []
 	@State private var _donators: [CreditsModel] = []
@@ -29,6 +28,11 @@ struct AboutView: View {
 	
 	private let _creditsUrl = "https://raw.githubusercontent.com/khcrysalis/project-credits/refs/heads/main/feather/creditsv2.json"
 	private let _donatorsUrl = "https://raw.githubusercontent.com/khcrysalis/project-credits/refs/heads/main/sponsors/credits.json"
+	
+	private var _sponsorsMarkdown: String {
+		_donators.map { "[\($0.name ?? $0.github)](https://github.com/\($0.github))" }
+			.joined(separator: ", ")
+	}
 	
 	// MARK: Body
 	var body: some View {
@@ -63,10 +67,13 @@ struct AboutView: View {
 				}
 				
 				NBSection(.localized("Sponsors")) {
-					Text(try! AttributedString(markdown: _donators.map {
-						"[\($0.name ?? $0.github)](https://github.com/\($0.github))"
-					}.joined(separator: ", ")))
-					.transition(.slide)
+					if let attributed = try? AttributedString(markdown: _sponsorsMarkdown) {
+						Text(attributed)
+							.transition(.slide)
+					} else {
+						Text(_sponsorsMarkdown)
+							.transition(.slide)
+					}
 					
 					Text(.localized("💜 This couldn't of been done without my sponsors!"))
 						.foregroundStyle(.secondary)
@@ -81,9 +88,10 @@ struct AboutView: View {
 	}
 	
 	private func _fetchAllData() async {
+		let dataService = NBFetchService()
 		await withTaskGroup(of: (String, CreditsDataHandler).self) { group in
-			group.addTask { return await _fetchCredits(self._creditsUrl, using: _dataService) }
-			group.addTask { return await _fetchCredits(self._donatorsUrl, using: _dataService) }
+			group.addTask { return await _fetchCredits(self._creditsUrl, using: dataService) }
+			group.addTask { return await _fetchCredits(self._donatorsUrl, using: dataService) }
 			
 			for await (type, result) in group {
 				await MainActor.run {

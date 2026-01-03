@@ -33,7 +33,7 @@ extension ServerInstaller {
 		var comps = URLComponents()
 		comps.scheme = self.getServerMethod() == 1 ? "http" : "https"
 		comps.host = sni()
-		comps.path = "/install"
+		comps.path = "/install/\(id.uuidString)"
 		comps.port = port
 		return comps.url!
 	}

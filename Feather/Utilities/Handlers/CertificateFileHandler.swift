@@ -39,17 +39,31 @@ final class CertificateFileHandler: NSObject {
 	}
 	
 	func copy() async throws {
-		guard
-			(_certPair != nil)
-		else {
+		guard _certPair != nil else {
 			throw CertificateFileHandlerError.certNotValid
 		}
 		
 		let destinationURL = try await _directory()
 
-		try _fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true)
-		try _fileManager.copyItem(at: _key, to: destinationURL.appendingPathComponent(_key.lastPathComponent))
-		try _fileManager.copyItem(at: _provision, to: destinationURL.appendingPathComponent(_provision.lastPathComponent))
+			do {
+				try _fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+				
+				let keyDestination = destinationURL.appendingPathComponent(_key.lastPathComponent)
+				let provisionDestination = destinationURL.appendingPathComponent(_provision.lastPathComponent)
+				
+				try _fileManager.copyItem(at: _key, to: keyDestination)
+				try _fileManager.copyItem(at: _provision, to: provisionDestination)
+				
+				let protection: [FileAttributeKey: Any] = [
+					.protectionKey: FileProtectionType.complete
+				]
+				try? _fileManager.setAttributes(protection, ofItemAtPath: destinationURL.path)
+				try? _fileManager.setAttributes(protection, ofItemAtPath: keyDestination.path)
+				try? _fileManager.setAttributes(protection, ofItemAtPath: provisionDestination.path)
+			} catch {
+			Logger.misc.error("Failed to copy certificate files: \(error.localizedDescription)")
+			throw error
+		}
 	}
 	
 	func addToDatabase() async throws {

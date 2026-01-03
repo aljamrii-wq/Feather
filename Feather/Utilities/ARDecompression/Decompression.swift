@@ -9,6 +9,21 @@
 import Foundation
 import SWCompression
 import Compression
+import OSLog
+
+private func _safeArchivePath(base: URL, entryName: String) -> URL? {
+	let trimmed = entryName.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !trimmed.isEmpty else { return nil }
+	
+	let candidate = URL(fileURLWithPath: trimmed, relativeTo: base).standardizedFileURL
+	let basePath = base.standardizedFileURL.path
+	
+	guard candidate.path.hasPrefix(basePath + "/") else {
+		return nil
+	}
+	
+	return candidate
+}
 
 func extractFile(at fileURL: inout URL) throws {
 	let fileExtension = fileURL.pathExtension.lowercased()
@@ -36,11 +51,18 @@ func extractFile(at fileURL: inout URL) throws {
 		try fileManager.createDirectory(at: extractionDirectory, withIntermediateDirectories: true)
 		
 		for entry in tarContainer {
-			let entryPath = extractionDirectory.appendingPathComponent(entry.info.name)
+			guard let entryPath = _safeArchivePath(base: extractionDirectory, entryName: entry.info.name) else {
+				Logger.misc.warning("Skipped unsafe tar entry: \(entry.info.name)")
+				continue
+			}
 			
 			if entry.info.type == .directory {
 				try fileManager.createDirectory(at: entryPath, withIntermediateDirectories: true)
 			} else if entry.info.type == .regular, let entryData = entry.data {
+				try fileManager.createDirectory(
+					at: entryPath.deletingLastPathComponent(),
+					withIntermediateDirectories: true
+				)
 				try entryData.write(to: entryPath)
 			}
 		}

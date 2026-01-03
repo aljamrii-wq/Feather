@@ -8,6 +8,12 @@
 import Foundation.NSFileManager
 
 extension FileManager {
+	private var _applicationSupportBase: URL {
+		let base = urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL.documentsDirectory
+		let bundleId = Bundle.main.bundleIdentifier ?? "Feather"
+		return base.appendingPathComponent(bundleId, isDirectory: true)
+	}
+	
 	/// Gives apps Signed directory
 	var archives: URL {
 		URL.documentsDirectory.appendingPathComponent("Archives")
@@ -35,10 +41,32 @@ extension FileManager {
 	
 	/// Gives apps Certificates directory
 	var certificates: URL {
-		URL.documentsDirectory.appendingPathComponent("Certificates")
+		_applicationSupportBase.appendingPathComponent("Certificates")
 	}
 	/// Gives apps Certificates directory with a UUID appending path
 	func certificates(_ uuid: String) -> URL {
 		certificates.appendingPathComponent(uuid)
+	}
+	
+	func migrateCertificatesIfNeeded() {
+		let legacyCertificates = URL.documentsDirectory.appendingPathComponent("Certificates")
+		guard fileExists(atPath: legacyCertificates.path) else { return }
+		
+		let newCertificates = certificates
+		
+		do {
+			try createDirectory(at: newCertificates, withIntermediateDirectories: true)
+			let items = try contentsOfDirectory(at: legacyCertificates, includingPropertiesForKeys: nil)
+			
+			for item in items {
+				let destination = newCertificates.appendingPathComponent(item.lastPathComponent)
+				if fileExists(atPath: destination.path) { continue }
+				try moveItem(at: item, to: destination)
+			}
+			
+			try? removeItem(at: legacyCertificates)
+		} catch {
+			// Best-effort migration only.
+		}
 	}
 }

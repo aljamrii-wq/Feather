@@ -29,7 +29,7 @@ struct InstallPreviewView: View {
 		self.isSharing = isSharing
 		let viewModel = InstallerStatusViewModel(isIdevice: UserDefaults.standard.integer(forKey: "Feather.installationMethod") == 1)
 		self._viewModel = StateObject(wrappedValue: viewModel)
-		self._installer = StateObject(wrappedValue: try! ServerInstaller(app: app, viewModel: viewModel))
+		self._installer = StateObject(wrappedValue: ServerInstaller.make(app: app, viewModel: viewModel))
 	}
 	
 	// MARK: Body
@@ -47,6 +47,7 @@ struct InstallPreviewView: View {
 			SafariRepresentableView(url: installer.pageEndpoint).ignoresSafeArea()
 		}
 		.onReceive(viewModel.$status) { newStatus in
+			guard installer.setupError == nil else { return }
 			if _installationMethod == 0 {
 				if case .ready = newStatus {
 					if _serverMethod == 0 {
@@ -101,6 +102,14 @@ struct InstallPreviewView: View {
 	}
 	
 	private func _install() {
+		if _installationMethod == 0, let error = installer.setupError {
+			UIAlertController.showAlertWithOk(
+				title: .localized("Install"),
+				message: String(describing: error)
+			)
+			return
+		}
+		
 		guard isSharing || app.identifier != Bundle.main.bundleIdentifier! || _installationMethod == 1 else {
 			UIAlertController.showAlertWithOk(
 				title: .localized("Install"),

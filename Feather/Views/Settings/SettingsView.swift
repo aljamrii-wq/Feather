@@ -111,20 +111,23 @@ extension SettingsView {
     
     @ViewBuilder
     private func _directories() -> some View {
-        NBSection(.localized("Misc")) {
-            Button(.localized("Open Documents"), systemImage: "folder") {
-                UIApplication.open(URL.documentsDirectory.toSharedDocumentsURL()!)
-            }
-            Button(.localized("Open Archives"), systemImage: "folder") {
-                UIApplication.open(FileManager.default.archives.toSharedDocumentsURL()!)
-            }
-            Button(.localized("Open Certificates"), systemImage: "folder") {
-                UIApplication.open(FileManager.default.certificates.toSharedDocumentsURL()!)
-            }
-        } footer: {
-            Text(.localized("All of the apps files are contained in the documents directory, here are some quick links to these."))
-        }
-    }
+		NBSection(.localized("Misc")) {
+			Button(.localized("Open Documents"), systemImage: "folder") {
+				UIApplication.open(URL.documentsDirectory.toSharedDocumentsURL()!)
+			}
+			Button(.localized("Open Archives"), systemImage: "folder") {
+				UIApplication.open(FileManager.default.archives.toSharedDocumentsURL()!)
+			}
+			Button(.localized("Open Certificates"), systemImage: "folder") {
+				UIAlertController.showAlertWithOk(
+					title: .localized("Certificates"),
+					message: .localized("Certificates are stored securely and are not exposed in the Files app.")
+				)
+			}
+		} footer: {
+			Text(.localized("Most app files are in Documents. Certificates are stored securely."))
+		}
+	}
     
     private func _makeGitHubIssueURL(url: String) -> String {
         var configurationSection = "### App Configuration:\n"

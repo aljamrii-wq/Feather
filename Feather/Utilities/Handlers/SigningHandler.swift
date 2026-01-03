@@ -56,11 +56,8 @@ final class SigningHandler: NSObject {
 			throw SigningFileHandlerError.appNotFound
 		}
 		
-		guard
-			let infoDictionary = NSDictionary(
-				contentsOf: movedAppPath.appendingPathComponent("Info.plist")
-			)!.mutableCopy() as? NSMutableDictionary
-		else {
+		guard let infoPlistPath = URL(string: movedAppPath.appendingPathComponent("Info.plist").absoluteString),
+			  let infoDictionary = NSMutableDictionary(contentsOf: infoPlistPath) else {
 			throw SigningFileHandlerError.infoPlistNotFound
 		}
 		
@@ -123,10 +120,6 @@ final class SigningHandler: NSObject {
 		
 		try await self.move()
 		try await self.addToDatabase()
-		
-		if let error = handler.hadError {
-			throw error
-		}
 	}
 	
 	func move() async throws {

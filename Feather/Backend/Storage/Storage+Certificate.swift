@@ -25,7 +25,17 @@ extension Storage {
 		let new = CertificatePair(context: context)
 		new.uuid = uuid
 		new.date = Date()
-		new.password = password
+		
+		if let password, !password.isEmpty {
+			do {
+				try KeychainHelper.setPassword(password, for: uuid)
+				new.password = nil
+			} catch {
+				new.password = password
+			}
+		} else {
+			new.password = nil
+		}
 		new.ppQCheck = ppq
 		new.expiration = expiration
 		new.nickname = nickname
@@ -39,6 +49,9 @@ extension Storage {
 	func deleteCertificate(for cert: CertificatePair) {
 		if let url = getUuidDirectory(for: cert) {
 			try? FileManager.default.removeItem(at: url)
+		}
+		if let uuid = cert.uuid {
+			KeychainHelper.deletePassword(for: uuid)
 		}
 		context.delete(cert)
 		saveContext()
@@ -64,13 +77,48 @@ extension Storage {
 		Zsign.checkRevokage(
 			provisionPath: Storage.shared.getFile(.provision, from: cert)?.path ?? "",
 			p12Path: Storage.shared.getFile(.certificate, from: cert)?.path ?? "",
-			p12Password: cert.password ?? ""
+			p12Password: password(for: cert) ?? ""
 		) { (status, _, _) in
 			if status == 1 {
 				DispatchQueue.main.async {
 					cert.revoked = true
 					self.saveContext()
 				}
+			}
+		}
+	}
+	
+	func password(for cert: CertificatePair) -> String? {
+		guard let uuid = cert.uuid else { return cert.password }
+		return KeychainHelper.password(for: uuid) ?? cert.password
+	}
+	
+	func migrateCertificatePasswordsIfNeeded() {
+		let certificates = getAllCertificates()
+		
+		for cert in certificates {
+			guard
+				let uuid = cert.uuid,
+				let password = cert.password,
+				!password.isEmpty
+			else { continue }
+			
+			do {
+				try KeychainHelper.setPassword(password, for: uuid)
+				cert.password = nil
+			} catch {
+				continue
+			}
+		}
+		
+		saveContext()
+	}
+	
+	func deleteAllCertificatePasswords() {
+		let certificates = getAllCertificates()
+		for cert in certificates {
+			if let uuid = cert.uuid {
+				KeychainHelper.deletePassword(for: uuid)
 			}
 		}
 	}

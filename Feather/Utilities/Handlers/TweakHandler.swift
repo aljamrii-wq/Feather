@@ -136,27 +136,30 @@ class TweakHandler {
 		
 		destinationURL = destinationURL.appendingPathComponent(url.lastPathComponent)
 		
-		
 		try _fileManager.moveFileIfNeeded(from: url, to: destinationURL)
 		
 		guard let appexe = Bundle(url: _app)?.executableURL else {
-			return
+			throw TweakHandlerError.missingFile("App executable not found")
 		}
 		
 		// change paths because some tweaks hardlink, which is not ideal.
-		// this is not a good solution, at most this would work for basic tweaks
-		// we recommend you use newer theos to compile, and make sure it works
-		// using the ellekit framework
-		_ = Zsign.changeDylibPath(
+		let successChange = Zsign.changeDylibPath(
 			appExecutable: destinationURL.path,
 			for: "/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate",
 			with: "@rpath/CydiaSubstrate.framework/CydiaSubstrate"
 		)
+		if !successChange {
+			Logger.misc.warning("Failed to change dylib path for \(destinationURL.lastPathComponent)")
+		}
+
 		// inject if there's a valid app main executable
-		_ = Zsign.injectDyLib(
+		let successInject = Zsign.injectDyLib(
 			appExecutable: appexe.path,
 			with: "\(_options.injectPath.rawValue)\(injectFolder.rawValue)\(destinationURL.lastPathComponent)"
 		)
+		if !successInject {
+			throw TweakHandlerError.injectionFailed("Failed to inject \(destinationURL.lastPathComponent)")
+		}
 	}
 	
 	// Inject imported framework dir
@@ -165,23 +168,27 @@ class TweakHandler {
 			let fexe = Bundle(url: framework)?.executableURL,
 			let appexe = Bundle(url: _app)?.executableURL
 		else {
-			return
+			throw TweakHandlerError.missingFile("Framework or App executable not found")
 		}
 		
 		// change paths because some tweaks hardlink, which is not ideal.
-		// this is not a good solution, at most this would work for basic tweaks
-		// we recommend you use newer theos to compile, and make sure it works
-		// using the ellekit framework
-		_ = Zsign.changeDylibPath(
+		let successChange = Zsign.changeDylibPath(
 			appExecutable: fexe.path,
 			for: "/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate",
 			with: "@rpath/CydiaSubstrate.framework/CydiaSubstrate"
 		)
+		if !successChange {
+			Logger.misc.warning("Failed to change dylib path for framework \(framework.lastPathComponent)")
+		}
+
 		// inject if there's a valid app main executable
-		_ = Zsign.injectDyLib(
+		let successInject = Zsign.injectDyLib(
 			appExecutable: appexe.path,
 			with: "@executable_path/Frameworks/\(framework.lastPathComponent)/\(fexe.lastPathComponent)"
 		)
+		if !successInject {
+			throw TweakHandlerError.injectionFailed("Failed to inject framework \(framework.lastPathComponent)")
+		}
 	}
 	
 	// Extracy imported deb file
@@ -193,14 +200,20 @@ class TweakHandler {
 		// but it somehow works well enough,
 		// do note large lzma's are slow as hell
 		
-		let handler = AR(with: url)
+		let handler = try AR(with: url)
 		let arFiles = try await handler.extract()
 		
 		for arFile in arFiles {
-			let outputPath = uniqueSubDir.appendingPathComponent(arFile.name)
+			guard let outputPath = _safeArchivePath(base: uniqueSubDir, entryName: arFile.name) else {
+				Logger.misc.warning("Skipped unsafe archive entry: \(arFile.name)")
+				continue
+			}
+			
+			try _fileManager.createDirectoryIfNeeded(at: outputPath.deletingLastPathComponent())
 			try arFile.content.write(to: outputPath)
 			
-			if ["data.tar.lzma", "data.tar.gz", "data.tar.xz", "data.tar.bz2"].contains(arFile.name) {
+			let filename = outputPath.lastPathComponent
+			if ["data.tar.lzma", "data.tar.gz", "data.tar.xz", "data.tar.bz2"].contains(filename) {
 				var fileToProcess = outputPath
 				try extractFile(at: &fileToProcess)
 				try extractFile(at: &fileToProcess)
@@ -253,6 +266,20 @@ class TweakHandler {
 
 // MARK: - Find correct files in debs
 extension TweakHandler {
+	private func _safeArchivePath(base: URL, entryName: String) -> URL? {
+		let trimmed = entryName.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return nil }
+		
+		let candidate = URL(fileURLWithPath: trimmed, relativeTo: base).standardizedFileURL
+		let basePath = base.standardizedFileURL.path
+		
+		guard candidate.path.hasPrefix(basePath + "/") else {
+			return nil
+		}
+		
+		return candidate
+	}
+	
 	private func _searchForBundles(in directory: URL) async throws {
 		let fileManager = FileManager.default
 		let allFiles = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
@@ -309,5 +336,6 @@ enum TweakHandlerError: Error {
 	case unsupportedFileExtension(String)
 	case decompressionFailed(String)
 	case missingFile(String)
+	case injectionFailed(String)
 	case noAccess
 }

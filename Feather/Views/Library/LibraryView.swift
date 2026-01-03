@@ -179,7 +179,7 @@ struct LibraryView: View {
 						for url in urls {
 							let id = "FeatherManualDownload_\(UUID().uuidString)"
 							let dl = downloadManager.startArchive(from: url, id: id)
-							try? downloadManager.handlePachageFile(url: url, dl: dl)
+							try? downloadManager.handlePackageFile(url: url, dl: dl)
 						}
 					}
 				)

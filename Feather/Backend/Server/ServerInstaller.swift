@@ -23,15 +23,31 @@ class ServerInstaller: Identifiable, ObservableObject {
 	var packageUrl: URL?
 	var app: AppInfoPresentable
 	@ObservedObject var viewModel: InstallerStatusViewModel
+	let setupError: Error?
 	private var _server: Application?
 
 	init(app: AppInfoPresentable, viewModel: InstallerStatusViewModel) throws {
 		self.app = app
 		self.viewModel = viewModel
+		self.setupError = nil
 		try _setup()
 		try _configureRoutes()
 		try _server?.server.start()
 		_needsShutdown = true
+	}
+	
+	private init(app: AppInfoPresentable, viewModel: InstallerStatusViewModel, setupError: Error) {
+		self.app = app
+		self.viewModel = viewModel
+		self.setupError = setupError
+	}
+	
+	static func make(app: AppInfoPresentable, viewModel: InstallerStatusViewModel) -> ServerInstaller {
+		do {
+			return try ServerInstaller(app: app, viewModel: viewModel)
+		} catch {
+			return ServerInstaller(app: app, viewModel: viewModel, setupError: error)
+		}
 	}
 	
 	deinit {
@@ -45,6 +61,9 @@ class ServerInstaller: Identifiable, ObservableObject {
 	private func _configureRoutes() throws {
 		_server?.get("*") { [weak self] req in
 			guard let self else { return Response(status: .badGateway) }
+			if !self._isAllowedClient(req) {
+				return Response(status: .forbidden)
+			}
 			switch req.url.path {
 			case plistEndpoint.path:
 				self._updateStatus(.sendingManifest)
@@ -71,7 +90,7 @@ class ServerInstaller: Identifiable, ObservableObject {
 				) { result in
 					self._updateStatus(.completed(result))
 				}
-			case "/install":
+			case pageEndpoint.path:
 				var headers = HTTPHeaders()
 				headers.add(name: .contentType, value: "text/html")
 				return Response(status: .ok, headers: headers, body: .init(string: self.html))
@@ -93,6 +112,19 @@ class ServerInstaller: Identifiable, ObservableObject {
 		DispatchQueue.main.async {
 			self.viewModel.status = newStatus
 		}
+	}
+	
+	private func _isAllowedClient(_ req: Request) -> Bool {
+		guard let ip = req.remoteAddress?.ipAddress else {
+			return true
+		}
+		
+		var allowed = Set(["127.0.0.1", "::1"])
+		if let local = Self.getLocalAddress() {
+			allowed.insert(local)
+		}
+		
+		return allowed.contains(ip)
 	}
 		
 	func getServerMethod() -> Int {

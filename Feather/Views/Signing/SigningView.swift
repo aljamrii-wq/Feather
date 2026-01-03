@@ -50,13 +50,8 @@ struct SigningView: View {
 				_customizationOptions(for: app)
 				_cert()
 				_customizationProperties(for: app)
-				
-				// horrible
-				Rectangle()
-					.foregroundStyle(.clear)
-					.frame(height: 30)
-					.listRowBackground(EmptyView())
 			}
+			.padding(.bottom, 60)
 			.overlay {
 				VStack(spacing: 0) {
 					Spacer()

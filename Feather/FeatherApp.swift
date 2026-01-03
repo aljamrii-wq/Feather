@@ -19,6 +19,9 @@ struct FeatherApp: App {
 	@StateObject var downloadManager = DownloadManager.shared
 	let storage = Storage.shared
 	
+	@AppStorage("Feather.userInterfaceStyle") var userInterfaceStyle: Int = 0
+	@AppStorage("Feather.userTintColor") var userTintColor: String = "#B496DC"
+
 	var body: some Scene {
 		WindowGroup {
 			VStack {
@@ -38,14 +41,8 @@ struct FeatherApp: App {
 					)
 				}
 			}
-			// dear god help me
-			.onAppear {
-				if let style = UIUserInterfaceStyle(rawValue: UserDefaults.standard.integer(forKey: "Feather.userInterfaceStyle")) {
-					UIApplication.topViewController()?.view.window?.overrideUserInterfaceStyle = style
-				}
-				
-				UIApplication.topViewController()?.view.window?.tintColor = UIColor(Color(hex: UserDefaults.standard.string(forKey: "Feather.userTintColor") ?? "#B496DC"))
-			}
+			.preferredColorScheme(userInterfaceStyle == 0 ? nil : (userInterfaceStyle == 1 ? .light : .dark))
+			.tint(Color(hex: userTintColor))
 		}
 	}
 	
@@ -86,17 +83,25 @@ struct FeatherApp: App {
 					return
 				}
 				
-				FR.handleCertificateFiles(
-					p12URL: p12URL,
-					provisionURL: provisionURL,
-					p12Password: password
-				) { error in
-					if let error = error {
-						UIAlertController.showAlertWithOk(title: .localized("Error"), message: error.localizedDescription)
-					} else {
-						generator.notificationOccurred(.success)
+				let importAction = UIAlertAction(title: .localized("Import"), style: .default) { _ in
+					FR.handleCertificateFiles(
+						p12URL: p12URL,
+						provisionURL: provisionURL,
+						p12Password: password
+					) { error in
+						if let error = error {
+							UIAlertController.showAlertWithOk(title: .localized("Error"), message: error.localizedDescription)
+						} else {
+							generator.notificationOccurred(.success)
+						}
 					}
 				}
+				
+				UIAlertController.showAlertWithCancel(
+					title: .localized("Import Certificate"),
+					message: .localized("An external app is requesting to import a signing certificate. Do you want to continue?"),
+					actions: [importAction]
+				)
 				
 				return
 			}
@@ -180,6 +185,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 	
 	private func _createDocumentsDirectories() {
 		let fileManager = FileManager.default
+		fileManager.migrateCertificatesIfNeeded()
 
 		let directories: [URL] = [
 			fileManager.archives,

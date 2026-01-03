@@ -8,6 +8,7 @@
 import Foundation
 import UIKit.UIApplication
 import Zip
+import OSLog
 import SwiftUI
 import IDeviceSwift
 
@@ -45,15 +46,15 @@ final class ArchiveHandler: NSObject {
 	}
 	
 	func archive() async throws -> URL {
-		return try await Task.detached(priority: .background) { [self] in
-			guard let payloadUrl = await self._payloadUrl else {
-				throw SigningFileHandlerError.appNotFound
-			}
-			
-			let zipUrl = self._uniqueWorkDir.appendingPathComponent("Archive.zip")
-			let ipaUrl = self._uniqueWorkDir.appendingPathComponent("Archive.ipa")
-			
-			try await Zip.zipFiles(
+		guard let payloadUrl = self._payloadUrl else {
+			throw SigningFileHandlerError.appNotFound
+		}
+		
+		let zipUrl = self._uniqueWorkDir.appendingPathComponent("Archive.zip")
+		let ipaUrl = self._uniqueWorkDir.appendingPathComponent("Archive.ipa")
+		
+		try await Task.detached(priority: .background) {
+			try Zip.zipFiles(
 				paths: [payloadUrl],
 				zipFilePath: zipUrl,
 				password: nil,
@@ -63,24 +64,31 @@ final class ArchiveHandler: NSObject {
 						self.viewModel.packageProgress = progress
 					}
 				})
-			
-			try FileManager.default.moveItem(at: zipUrl, to: ipaUrl)
-			return ipaUrl
 		}.value
+		
+		try FileManager.default.moveItem(at: zipUrl, to: ipaUrl)
+		return ipaUrl
 	}
 	
 	func moveToArchive(_ package: URL, shouldOpen: Bool = false) async throws -> URL? {
-		let appendingString = "\(_app.name!)_\(_app.version!)_\(Int(Date().timeIntervalSince1970)).ipa"
+		let name = _sanitizeFilenameComponent(_app.name ?? "", fallback: "Unknown")
+		let version = _sanitizeFilenameComponent(_app.version ?? "", fallback: "1.0")
+		let timestamp = Int(Date().timeIntervalSince1970)
+		let appendingString = "\(name)_\(version)_\(timestamp).ipa"
 		let dest = _fileManager.archives.appendingPathComponent(appendingString)
 		
-		try? _fileManager.moveItem(
-			at: package,
-			to: dest
-		)
+		do {
+			try _fileManager.moveItem(at: package, to: dest)
+		} catch {
+			Logger.misc.error("Failed to move package to archive: \(error.localizedDescription)")
+			throw error
+		}
 		
 		if shouldOpen {
-			await MainActor.run {
-				UIApplication.open(FileManager.default.archives.toSharedDocumentsURL()!)
+			if let sharedURL = FileManager.default.archives.toSharedDocumentsURL() {
+				await MainActor.run {
+					UIApplication.open(sharedURL)
+				}
 			}
 		}
 		
@@ -89,5 +97,18 @@ final class ArchiveHandler: NSObject {
 	
 	static func getCompressionLevel() -> Int {
 		UserDefaults.standard.integer(forKey: "Feather.compressionLevel")
+	}
+	
+	private func _sanitizeFilenameComponent(_ value: String, fallback: String) -> String {
+		let allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+		let mapped = value.map { allowed.contains($0) ? $0 : "_" }
+		let trimmed = String(mapped)
+			.trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
+		
+		if trimmed.isEmpty {
+			return fallback
+		}
+		
+		return String(trimmed.prefix(64))
 	}
 }
