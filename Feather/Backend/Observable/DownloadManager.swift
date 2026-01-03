@@ -142,7 +142,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
 	func handlePackageFile(url: URL, dl: Download) throws {
 		FR.handlePackageFile(url, download: dl) { err in
 			if let err = err {
-				Logger.downloads.error("Failed to handle package file: \(err.localizedDescription)")
+				OSLog.Logger.downloads.error("Failed to handle package file: \(err.localizedDescription)")
 				let generator = UINotificationFeedbackGenerator()
 				generator.notificationOccurred(.error)
 			}
@@ -178,7 +178,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
 			
 			try handlePackageFile(url: destinationURL, dl: download)
 		} catch {
-			Logger.downloads.error("Error handling downloaded file: \(error.localizedDescription)")
+			OSLog.Logger.downloads.error("Error handling downloaded file: \(error.localizedDescription)")
 		}
 	}
     

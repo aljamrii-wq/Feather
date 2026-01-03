@@ -42,7 +42,7 @@ final class Storage: ObservableObject {
 				do {
 					try self.context.save()
 				} catch {
-					Logger.storage.error("Failed to save context: \(error.localizedDescription)")
+					OSLog.Logger.storage.error("Failed to save context: \(error.localizedDescription)")
 				}
 			}
 		}
@@ -53,7 +53,7 @@ final class Storage: ObservableObject {
 		do {
 			_ = try context.execute(deleteRequest)
 		} catch {
-			Logger.storage.error("Failed to clear context: \(error.localizedDescription)")
+			OSLog.Logger.storage.error("Failed to clear context: \(error.localizedDescription)")
 		}
 	}
 	

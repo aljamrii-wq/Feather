@@ -80,7 +80,7 @@ final class ArchiveHandler: NSObject {
 		do {
 			try _fileManager.moveItem(at: package, to: dest)
 		} catch {
-			Logger.misc.error("Failed to move package to archive: \(error.localizedDescription)")
+			OSLog.Logger.misc.error("Failed to move package to archive: \(error.localizedDescription)")
 			throw error
 		}
 		
