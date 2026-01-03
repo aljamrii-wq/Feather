@@ -30,11 +30,9 @@ final class ZsignHandler {
 		}
 		
 		let bundle = Bundle(url: _appUrl)
-		let execPath = _appUrl.appendingPathComponent(bundle?.exec ?? "").relativePath
+		let execURL = _appUrl.appendingPathComponent(bundle?.exec ?? "")
 		
-		if !Zsign.removeDylibs(appExecutable: execPath, using: _options.disInjectionFiles) {
-			throw SigningFileHandlerError.disinjectFailed
-		}
+		try Zsign.removeDylibs(at: execURL, dylibs: _options.disInjectionFiles)
 	}
 	
 	func sign() async throws {
@@ -42,40 +40,22 @@ final class ZsignHandler {
 			throw SigningFileHandlerError.missingCertifcate
 		}
 
-		try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-				_ = Zsign.sign(
-					appPath: _appUrl.relativePath,
-					provisionPath: Storage.shared.getFile(.provision, from: cert)?.path ?? "",
-					p12Path: Storage.shared.getFile(.certificate, from: cert)?.path ?? "",
-					p12Password: Storage.shared.password(for: cert) ?? "",
-					entitlementsPath: _options.appEntitlementsFile?.path ?? "",
-					removeProvision: !_options.removeProvisioning,
-				completion: { _, error in
-					if let error = error {
-						continuation.resume(throwing: error)
-					} else {
-						continuation.resume()
-					}
-				}
-			)
-		}
+		try await Zsign.sign(
+			appURL: _appUrl,
+			provisioningURL: Storage.shared.getFile(.provision, from: cert),
+			p12URL: Storage.shared.getFile(.certificate, from: cert),
+			p12Password: Storage.shared.password(for: cert) ?? "",
+			entitlementsURL: _options.appEntitlementsFile,
+			removeProvision: !_options.removeProvisioning
+		)
 	}
 	
 	func adhocSign() async throws {
-		try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-			_ = Zsign.sign(
-				appPath: _appUrl.relativePath,
-				entitlementsPath: _options.appEntitlementsFile?.path ?? "",
-				adhoc: true,
-				removeProvision: !_options.removeProvisioning,
-				completion: { _, error in
-					if let error = error {
-						continuation.resume(throwing: error)
-					} else {
-						continuation.resume()
-					}
-				}
-			)
-		}
+		try await Zsign.sign(
+			appURL: _appUrl,
+			entitlementsURL: _options.appEntitlementsFile,
+			adhoc: true,
+			removeProvision: !_options.removeProvisioning
+		)
 	}
 }
